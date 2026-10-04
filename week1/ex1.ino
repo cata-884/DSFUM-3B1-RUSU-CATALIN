@@ -1,6 +1,6 @@
 /*
  *
- Realizati un program pentru Arduino care sa primească de la portul serial una din optiunile 1,2 sau 3.
+ R *ealizati un program pentru Arduino care sa primească de la portul serial una din optiunile 1,2 sau 3.
 
  Dacă opțiunea aleasă este 1 se va afișa pe portul serial cuvântul "pornit" și va aprinde ledul de la pinul 13.
  Dacă opțiunea aleasă este 2 se va afișa pe portul serial cuvântul "oprit" și va stinge ledul de la pinul 13.
@@ -20,7 +20,6 @@ struct Calculator {
 Calculator calc;
 char s[100];
 int idx = 0;
-char c;
 int current_num, prev_num;
 
 void setup() {
@@ -45,7 +44,6 @@ void populare_obiect(Calculator& calc) {
       if (nr_it > 0) {
         nr[nr_it] = '\0';
         calc.n[nr_cnt++] = atoi(nr);
-        memset(nr, 0, sizeof(nr));
         nr_it = 0;
       }
       calc.op = s[s_it];
@@ -54,7 +52,6 @@ void populare_obiect(Calculator& calc) {
       if (nr_it > 0) {
         nr[nr_it] = '\0';
         calc.n[nr_cnt++] = atoi(nr);
-        memset(nr, 0, sizeof(nr));
         nr_it = 0;
       }
     }
@@ -69,72 +66,86 @@ void populare_obiect(Calculator& calc) {
   }
 }
 
-void loop() {
-  if (Serial.available() > 0) {
-    c = Serial.read();
-    s[idx++] = c;
-    if(c == '\n') {
+int compute_res(int n1, int n2, int &res) {
+  switch(calc.op) {
+    case '+':
+      res = n1 + n2;
+      break;
+    case '-':
+      res = n1 - n2;
+      break;
+    case '*':
+      res = n1 * n2;
+      break;
+    case '/':
+      res = n1 / n2;
+      break;
+    default:
+      return -1;
+  }
+  return 0;
+}
 
-      memset(&calc, 0, sizeof(struct Calculator));
-      populare_obiect(calc);
-      if(calc.op != 0) {
-        int res;
-        const int n1 = calc.n[0], n2 = calc.n[1];
-        switch(calc.op) {
-          case '+':
-            res = n1 + n2;
-            break;
-          case '-':
-            res = n1 - n2;
-            break;
-          case '*':
-            res = n1 * n2;
-            break;
-          case '/':
-            res = n1 / n2;
-            break;
-          default:
-            Serial.println(" operatie invalida ");
-        }
-        char buffer[40];
-        sprintf(buffer, "%d %c %d = %d", calc.n[0], calc.op, calc.n[1], res);
-        //daca suntem pe 'blink', rez o sa intarzie cu doua secunde, din cauza delay-ului
-        Serial.println(buffer);
-      }
-      else {
-        current_num = calc.n[0];
-        if(!is_valid(current_num)) {
-          current_num = prev_num;
-        }
-        else {
-          prev_num = current_num;
-        }
-        switch (current_num) {
-          case 1:
-            Serial.println("pornit");
-            digitalWrite(13, HIGH);
-            break;
-          case 2:
-            Serial.println("oprit");
-            digitalWrite(13, LOW);
-            break;
-          case 3:
-            Serial.println("blink");
-            digitalWrite(13, HIGH);
-            delay(1000);
-            digitalWrite(13, LOW);
-            delay(1000);
-            break;
-          default:
-            break;
-        }
-      }
-      memset(s, 0, sizeof(s));
-      idx = 0;
-      c = 0;
+void apply_cmd(int cmd) {
+  switch (cmd) {
+    case 1:
+      Serial.println("pornit");
+      digitalWrite(13, HIGH);
+      break;
+    case 2:
+      Serial.println("oprit");
+      digitalWrite(13, LOW);
+      break;
+    case 3:
+      Serial.println("blink");
+      break;
+    default:
+      break;
+  }
+}
+
+void process_finished_stream() {
+  memset(&calc, 0, sizeof(struct Calculator));
+  populare_obiect(calc);
+  if(calc.op != 0) {
+    int res;
+    int code = compute_res(calc.n[0], calc.n[1], res);
+    if(!code) {
+      char buffer[40];
+      sprintf(buffer, "%d %c %d = %d", calc.n[0], calc.op, calc.n[1], res);
+      //daca suntem pe 'blink', rez o sa intarzie cu doua secunde, din cauza delay-ului
+      Serial.println(buffer);
+    }
+    else {
+      Serial.println(" operatie invalida ");
     }
   }
-  if (current_num == 3) {
+  else {
+    current_num = calc.n[0];
+    if(!is_valid(current_num)) {
+      current_num = prev_num;
+    }
+    else {
+      prev_num = current_num;
+    }
+    apply_cmd(current_num);
+  }
+  memset(s, 0, sizeof(s));
+  idx = 0;
+}
+
+void loop() {
+  char c;
+  if (Serial.available() > 0) {
+    c = Serial.read();
+    if (idx < (int)sizeof(s) - 1) {
+      s[idx++] = c;
+    }
+    if(c == '\n') {
+      process_finished_stream();
+    }
+  }
+  if(current_num == 3) {
     digitalWrite(13, HIGH);
     delay(1000);
     digitalWrite(13, LOW);
